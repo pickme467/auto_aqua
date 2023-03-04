@@ -217,6 +217,10 @@ class HW:
     def led_pink(self):
         self.led.fill((255, 0, 255))
 
+    def set_day_night_led_evening(self):
+        self.day_night_led1.set_evening()
+        self.day_night_led2.set_evening()
+
     def set_day_night_led_night(self):
         self.day_night_led1.set_night()
         self.day_night_led2.set_night()
@@ -260,25 +264,21 @@ class Lights:
     TICK = 1
     H = 60 * 60
     H_H = 30 * 60
+    M = 60
 
-    def __init__(self, hw):
+    def __init__(self, hw, schedule):
         self.hw = hw
+        self.schedule = schedule
         # self.self_test()
         self.mode = self.get_mode(self.hw.time_of_day())
         self.act(self.mode)
 
     def self_test(self):
         Lights.print_current_time('Self test START')
-        self.act('off')
-        time.sleep(5)
-        self.act('dawn')
-        time.sleep(5)
-        self.act('day')
-        time.sleep(5)
-        self.act('dusk')
-        time.sleep(5)
-        self.act('off')
-        time.sleep(5)
+        for end_time, color, mode in self.schedule:
+            self.led_color(color)
+            self.act(mode)
+            time.sleep(5)
         Lights.print_current_time('Self test DONE')
 
     def loop(self):
@@ -302,95 +302,84 @@ class Lights:
             self.act(new_mode)
             self.mode = new_mode
         if current_time % 2:
-            self.get_color(self.mode)(self.hw)
+            self.set_led_color(current_time)
         else:
             self.hw.led_off()
 
-    def get_color(self, mode):
-        mode_to_led_color= {'dawn': HW.led_blue,
-                            'day': HW.led_green, 'dusk': HW.led_pink, 'off': HW.led_red}
-        return mode_to_led_color[mode]
+    def set_led_color(self, time):
+        for end_time, color, mode in self.schedule:
+            if time < self.to_sec(end_time):
+                self.led_color(color)
 
     def get_mode(self, time):
-        mode_range = [( 0,             6 * Lights.H - 1, 'off'),
-                      ( 6 * Lights.H,  8 * Lights.H - 1, 'dawn'),
-                      ( 8 * Lights.H, 20 * Lights.H - 1, 'day'),
-                      (20 * Lights.H, 22 * Lights.H - 1, 'dusk'),
-                      (22 * Lights.H, 24 * Lights.H - 1, 'off')]
-        for start, end, mode in mode_range:
-            if time >= start and time <= end:
+        for end_time, color, mode in self.schedule:
+            if time < self.to_sec(end_time):
                 return mode
-        return 'off'
+        return {}
+
+    def to_sec(self, time):
+        h, m = time
+        return h * Lights.H + m * Lights.M
 
     def act(self, mode):
-        Lights.print_current_time(f'Executing action for {mode} mode')
-        mode_to_action = {'dawn': Lights.set_dawn_mode,
-                          'day': Lights.set_day_mode,
-                          'dusk': Lights.set_dusk_mode,
-                          'off': Lights.set_off_mode}
-        mode_to_action[mode](self)
+        mode_description = self.mode_to_array(mode)
+        self.hw.set_text(['S'] + mode_description)
+        for device, command in mode.items():
+            self.set_device(device, command)
+        self.hw.set_text(mode_description)
+
+    def mode_to_array(self, mode):
+        output = []
+        for device, command in mode.items():
+            output += [device + ': ' + command]
+        return output
 
     def print_current_time(description):
         now = time.localtime()
         print(f'{description}, Current time: {now.tm_hour:02d}:{now.tm_min:02d}:{now.tm_sec:02d}')
 
-    def set_dawn_mode(self):
-        self.hw.set_text(['start dawn mode: co2 off', 'lights: night', 'plant: off'])
-        self.day_lights_off()
-        self.co2_valve_off()
-        self.day_night_lights_night()
-        self.hw.set_text(['dawn mode: co2 off', 'lights: night', 'plant: off'])
+    def set_device(self, device, command):
+        handlers = {'day-lights': Lights.set_day_lights,
+                    'co2-valve': Ligths.set_co2_valve,
+                    'plant-lights': Lights.set_plant_lights}
+        handlers[device](self, command)
 
-    def set_day_mode(self):
-        self.hw.set_text(['start day mode: co2 on', 'lights: day', 'plant: on'])
-        self.day_lights_on()
-        self.co2_valve_on()
-        self.day_night_lights_day()
-        self.hw.set_text(['day mode: co2 on', 'lights: day', 'plant: on'])
+    def set_day_lights(self, command):
+        command_to_function = {'off': HW.set_day_night_led_off, 'day': HW.set_day_night_led_day,
+                               'night': HW.set_day_night_led_night, 'evening': HW.set_day_night_led_evening}
+        print(f'set_day_lights: {command}')
+        command_to_function[command](self.hw)
 
-    def set_dusk_mode(self):
-        self.hw.set_text(['start dusk mode: co2 off', 'lights: night', 'plant: off'])
-        self.day_lights_off()
-        self.co2_valve_off()
-        self.day_night_lights_night()
-        self.hw.set_text(['dusk mode: co2 off', 'lights: night', 'plant: off'])
+    def set_co2_valve(self, command):
+        command_to_function = {'off': HW.set_co2_off, 'on': HW.set_co2_on}
+        print(f'set_co2_valve: {command}')
+        command_to_function[command](self.hw)
 
-    def set_off_mode(self):
-        self.hw.set_text(['start off mode: co2 off', 'lights: off', 'plant: off'])
-        self.day_lights_off()
-        self.co2_valve_off()
-        self.day_night_lights_off()
-        self.hw.set_text(['off mode: co2 off', 'lights: off', 'plant: off'])
+    def set_plant_lights(self, command):
+        command_to_function = {'off': HW.set_plant_led_off, 'on': HW.set_plant_led_on}
+        print(f'set_plant_lights: {command}')
+        command_to_function[command](self.hw)
 
-    def day_night_lights_night(self):
-        print('set day-night lights: night')
-        self.hw.set_day_night_led_night()
-
-    def day_night_lights_day(self):
-        print('set day-night lights: day')
-        self.hw.set_day_night_led_day()
-
-    def day_night_lights_off(self):
-        print('set day-night lights: off')
-        self.hw.set_day_night_led_off()
-
-    def day_lights_on(self):
-        print('set day lights: on')
-        self.hw.set_plant_led_on()
-
-    def day_lights_off(self):
-        print('set day lights: off')
-        self.hw.set_plant_led_off()
-
-    def co2_valve_on(self):
-        print('set co2 valve: on')
-        self.hw.set_co2_on()
-
-    def co2_valve_off(self):
-        print('set co2 valve: off')
-        self.hw.set_co2_off()
+    def led_color(self, color):
+        color_to_function = {'red': HW.led_red, 'blue': HW.led_blue, 'cyan': HW.led_cyan,
+                             'green': HW.led_green, 'pink': HW.led_pink, 'yellow': HW.led_yellow}
+        print(f'led_color: {color}')
+        color_to_function[color](self.hw)
 
 if __name__ == '__main__':
     hw = HW.build_prepared()
-    l = Lights(hw)
+
+    # schedule tuple format: (end_time, led_color, mode_directives)
+    # mode directive dictionary format: {device: mode},
+    # where device = 'plant_lights' | 'co2-valve',  mode: 'on' | 'off'
+    # or device =  'day-lights', mode 'day' | 'night' | 'evening' | 'off'
+    schedule = [(( 6, 0), 'red',    {'plant-lights': 'off', 'co2-valve': 'off', 'day-lights': 'off'}),
+                (( 8, 0), 'blue',   {'plant-lights': 'off', 'co2-valve': 'off', 'day-lights': 'night'}),
+                (( 9, 0), 'cyan',   {'plant-lights': 'off', 'co2-valve':  'on', 'day-lights': 'evening'}),
+                ((19, 0), 'green',  {'plant-lights':  'on', 'co2-valve':  'on', 'day-lights': 'day'}),
+                ((20, 0), 'pink',   {'plant-lights': 'off', 'co2-valve': 'off', 'day-lights': 'evening'}),
+                ((22, 0), 'yellow', {'plant-lights': 'off', 'co2-valve': 'off', 'day-lights': 'night'}),
+                ((24, 0), 'red',    {'plant-lights': 'off', 'co2-valve': 'off', 'day-lights': 'off'})]
+
+    l = Lights(hw, schedule)
     l.loop()
