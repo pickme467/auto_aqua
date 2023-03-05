@@ -134,24 +134,19 @@ class RTC:
     def datetime(self):
         return self.rtc.datetime
 
-    def time_of_day(self):
-        t = self.rtc.datetime
-        hour = t.tm_hour
-        if (t.tm_mon > 3 and t.tm_mon < 11) or (t.tm_mon in (3, 10) and t.tm_mday > 24):
-            hour += 1
-        return (hour * 3600 + t.tm_min * 60 + t.tm_sec) % (3600 * 24)
+    def local_time(self):
+        return self.rtc.datetime
 
 class HW:
-    def build_prepared(time_multiplier = 1):
+    def build_prepared():
         return HW.build(co2_pin = board.GP29,
                         plant_led_pin = board.GP28,
                         day_night_led_pins = (board.GP27, board.GP26),
                         i2c_pins = (board.GP15, board.GP14),
                         down_button_pin = board.GP7,
-                        up_button_pin = board.GP8,
-                        time_multiplier = time_multiplier)
+                        up_button_pin = board.GP8)
 
-    def build(i2c_pins, co2_pin, plant_led_pin, day_night_led_pins, down_button_pin, up_button_pin, time_multiplier):
+    def build(i2c_pins, co2_pin, plant_led_pin, day_night_led_pins, down_button_pin, up_button_pin):
         i2c_scl, i2c_sda = i2c_pins
         day_night_led1, day_night_led2 = day_night_led_pins
         return HW(co2_pin = co2_pin,
@@ -159,17 +154,16 @@ class HW:
                   day_night_led1_pin = day_night_led1, day_night_led2_pin = day_night_led2,
                   down_button_pin = down_button_pin,
                   up_button_pin = up_button_pin,
-                  i2c_scl_pin = i2c_scl, i2c_sda_pin = i2c_sda, time_multiplier = time_multiplier)
+                  i2c_scl_pin = i2c_scl, i2c_sda_pin = i2c_sda)
 
     def __init__(self, co2_pin, plant_led_pin,
                  day_night_led1_pin, day_night_led2_pin,
                  down_button_pin, up_button_pin,
-                 i2c_scl_pin, i2c_sda_pin, time_multiplier):
+                 i2c_scl_pin, i2c_sda_pin):
         self.led = neopixel.NeoPixel(board.NEOPIXEL, 1, brightness=0.03)
         self.i2c = busio.I2C(i2c_scl_pin, i2c_sda_pin)
         self.rtc = RTC(self.i2c)
         rtc.set_time_source(self.rtc)
-        self.time_multiplier = time_multiplier
         self.oled = OLED(self.i2c)
         self.set_text(['................',
                        '..starting up...',
@@ -254,13 +248,18 @@ class HW:
         self.co2.off()
 
     def set_text(self, text):
+        print(f'OLED: {text}')
         self.oled.set_text(text)
 
     def time(self):
         return time.time()
 
     def time_of_day(self):
-        return (self.time_multiplier * self.rtc.time_of_day()) % (24 * 3600)
+        t = self.rtc.localtime()
+        hour = t.tm_hour
+        if (t.tm_mon > 3 and t.tm_mon < 11) or (t.tm_mon in (3, 10) and t.tm_mday > 24):
+            hour += 1
+        return (hour * 3600 + t.tm_min * 60 + t.tm_sec) % (3600 * 24)
 
 class Lights:
     TICK = 1
@@ -312,6 +311,7 @@ class Lights:
         for end_time, color, mode in self.schedule:
             if time < self.to_sec(end_time):
                 self.led_color(color)
+                return
 
     def get_mode(self, time):
         for end_time, color, mode in self.schedule:
@@ -342,7 +342,7 @@ class Lights:
 
     def set_device(self, device, command):
         handlers = {'day-lights': Lights.set_day_lights,
-                    'co2-valve': Ligths.set_co2_valve,
+                    'co2-valve': Lights.set_co2_valve,
                     'plant-lights': Lights.set_plant_lights}
         handlers[device](self, command)
 
