@@ -142,15 +142,16 @@ class RTC:
         return (hour * 3600 + t.tm_min * 60 + t.tm_sec) % (3600 * 24)
 
 class HW:
-    def build_prepared():
+    def build_prepared(time_multiplier = 1):
         return HW.build(co2_pin = board.GP29,
-                  plant_led_pin = board.GP28,
-                  day_night_led_pins = (board.GP27, board.GP26),
-                  i2c_pins = (board.GP15, board.GP14),
-                  down_button_pin = board.GP7,
-                  up_button_pin = board.GP8)
+                        plant_led_pin = board.GP28,
+                        day_night_led_pins = (board.GP27, board.GP26),
+                        i2c_pins = (board.GP15, board.GP14),
+                        down_button_pin = board.GP7,
+                        up_button_pin = board.GP8,
+                        time_multiplier = time_multiplier)
 
-    def build(i2c_pins, co2_pin, plant_led_pin, day_night_led_pins, down_button_pin, up_button_pin):
+    def build(i2c_pins, co2_pin, plant_led_pin, day_night_led_pins, down_button_pin, up_button_pin, time_multiplier):
         i2c_scl, i2c_sda = i2c_pins
         day_night_led1, day_night_led2 = day_night_led_pins
         return HW(co2_pin = co2_pin,
@@ -158,16 +159,17 @@ class HW:
                   day_night_led1_pin = day_night_led1, day_night_led2_pin = day_night_led2,
                   down_button_pin = down_button_pin,
                   up_button_pin = up_button_pin,
-                  i2c_scl_pin = i2c_scl, i2c_sda_pin = i2c_sda)
+                  i2c_scl_pin = i2c_scl, i2c_sda_pin = i2c_sda, time_multiplier = time_multiplier)
 
     def __init__(self, co2_pin, plant_led_pin,
                  day_night_led1_pin, day_night_led2_pin,
                  down_button_pin, up_button_pin,
-                 i2c_scl_pin, i2c_sda_pin):
+                 i2c_scl_pin, i2c_sda_pin, time_multiplier):
         self.led = neopixel.NeoPixel(board.NEOPIXEL, 1, brightness=0.03)
         self.i2c = busio.I2C(i2c_scl_pin, i2c_sda_pin)
         self.rtc = RTC(self.i2c)
         rtc.set_time_source(self.rtc)
+        self.time_multiplier = time_multiplier
         self.oled = OLED(self.i2c)
         self.set_text(['................',
                        '..starting up...',
@@ -258,7 +260,7 @@ class HW:
         return time.time()
 
     def time_of_day(self):
-        return self.rtc.time_of_day()
+        return (self.time_multiplier * self.rtc.time_of_day()) % (24 * 3600)
 
 class Lights:
     TICK = 1
