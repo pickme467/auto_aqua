@@ -134,7 +134,7 @@ class RTC:
     def datetime(self):
         return self.rtc.datetime
 
-    def local_time(self):
+    def localtime(self):
         return self.rtc.datetime
 
 class HW:
