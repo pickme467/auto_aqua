@@ -267,10 +267,11 @@ class Lights:
     H_H = 30 * 60
     M = 60
 
-    def __init__(self, hw, schedule):
+    def __init__(self, hw, schedule, self_test = False):
         self.hw = hw
         self.schedule = schedule
-        # self.self_test()
+        if self_test == True:
+            self.self_test()
         self.mode = self.get_mode(self.hw.time_of_day())
         self.act(self.mode)
 
@@ -325,15 +326,16 @@ class Lights:
 
     def act(self, mode):
         mode_description = self.mode_to_array(mode)
-        self.hw.set_text(['S'] + mode_description)
+        self.hw.set_text(mode_description)
         for device, command in mode.items():
             self.set_device(device, command)
-        self.hw.set_text(mode_description)
 
     def mode_to_array(self, mode):
         output = []
+        tm = time.localtime()
+        hms = [f'{tm.tm_hour:02d}  ', f'{tm.tm_min:02d}  ', f'{tm.tm_sec:02d}  ']
         for device, command in mode.items():
-            output += [device + ': ' + command]
+            output += [hms.pop(0) + device + ': ' + command]
         return output
 
     def print_current_time(description):
@@ -376,12 +378,13 @@ if __name__ == '__main__':
     # where device = 'plant_lights' | 'co2-valve',  mode: 'on' | 'off'
     # or device =  'day-lights', mode 'day' | 'night' | 'evening' | 'off'
     schedule = [(( 6, 0), 'red',    {'plant-lights': 'off', 'co2-valve': 'off', 'day-lights': 'off'}),
-                (( 8, 0), 'blue',   {'plant-lights': 'off', 'co2-valve': 'off', 'day-lights': 'night'}),
+                (( 7, 0), 'blue',   {'plant-lights': 'off', 'co2-valve': 'off', 'day-lights': 'night'}),
+                (( 8, 0), 'blue',   {'plant-lights': 'off', 'co2-valve':  'on', 'day-lights': 'night'}),
                 (( 9, 0), 'cyan',   {'plant-lights': 'off', 'co2-valve':  'on', 'day-lights': 'evening'}),
                 ((19, 0), 'green',  {'plant-lights':  'on', 'co2-valve':  'on', 'day-lights': 'day'}),
                 ((20, 0), 'pink',   {'plant-lights': 'off', 'co2-valve': 'off', 'day-lights': 'evening'}),
                 ((22, 0), 'yellow', {'plant-lights': 'off', 'co2-valve': 'off', 'day-lights': 'night'}),
                 ((24, 0), 'red',    {'plant-lights': 'off', 'co2-valve': 'off', 'day-lights': 'off'})]
 
-    l = Lights(hw, schedule)
+    l = Lights(hw, schedule, self_test = False)
     l.loop()
