@@ -257,9 +257,33 @@ class HW:
     def time_of_day(self):
         t = self.rtc.localtime()
         hour = t.tm_hour
-        if (t.tm_mon > 3 and t.tm_mon < 11) or (t.tm_mon in (3, 10) and t.tm_mday > 24):
+        if self.is_daylight(t.tm_mon, t.tm_mday, t.tm_wday):
             hour += 1
         return (hour * 3600 + t.tm_min * 60 + t.tm_sec) % (3600 * 24)
+
+    def is_daylight(self, month, day, weekday):
+        if month > 3 and month < 10:
+            return True
+
+        if month < 3 or month > 10:
+            return False
+
+        weekdaysAfterSwitch = {31: [6, 0, 1, 2, 3, 4, 5],
+                               30: [6, 0, 1, 2, 3, 4],
+                               29: [6, 0, 1, 2, 3],
+                               28: [6, 0, 1, 2],
+                               27: [6, 0, 1],
+                               26: [6, 0],
+                               25: [6]}
+        if month == 3:
+           if day >= 25 and weekday in weekdaysAfterSwitch[day]:
+                return True
+           return False
+
+        if month == 10:
+            if day >= 25 and weekday in weekdaysAfterSwitch[day]:
+                return False
+            return True
 
 class Lights:
     TICK = 1
